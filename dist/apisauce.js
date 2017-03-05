@@ -4,89 +4,25 @@ Object.defineProperty(exports, '__esModule', { value: true });
 
 function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
 
+var _regeneratorRuntime = _interopDefault(require('babel-runtime/regenerator'));
+var _extends = _interopDefault(require('babel-runtime/helpers/extends'));
+var _asyncToGenerator = _interopDefault(require('babel-runtime/helpers/asyncToGenerator'));
+var _typeof = _interopDefault(require('babel-runtime/helpers/typeof'));
 var axios = _interopDefault(require('axios'));
 var R = _interopDefault(require('ramda'));
 var RS = _interopDefault(require('ramdasauce'));
 
-var _extends = Object.assign || function (target) {
-  for (var i = 1; i < arguments.length; i++) {
-    var source = arguments[i];
-
-    for (var key in source) {
-      if (Object.prototype.hasOwnProperty.call(source, key)) {
-        target[key] = source[key];
-      }
-    }
-  }
-
-  return target;
-};
-
-var get = function get(object, property, receiver) {
-  if (object === null) object = Function.prototype;
-  var desc = Object.getOwnPropertyDescriptor(object, property);
-
-  if (desc === undefined) {
-    var parent = Object.getPrototypeOf(object);
-
-    if (parent === null) {
-      return undefined;
-    } else {
-      return get(parent, property, receiver);
-    }
-  } else if ("value" in desc) {
-    return desc.value;
-  } else {
-    var getter = desc.get;
-
-    if (getter === undefined) {
-      return undefined;
-    }
-
-    return getter.call(receiver);
-  }
-};
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-var set = function set(object, property, value, receiver) {
-  var desc = Object.getOwnPropertyDescriptor(object, property);
-
-  if (desc === undefined) {
-    var parent = Object.getPrototypeOf(object);
-
-    if (parent !== null) {
-      set(parent, property, value, receiver);
-    }
-  } else if ("value" in desc && desc.writable) {
-    desc.value = value;
-  } else {
-    var setter = desc.set;
-
-    if (setter !== undefined) {
-      setter.call(receiver, value);
-    }
-  }
-
-  return value;
-};
+var _this = undefined;
 
 // check for an invalid config
 var isInvalidConfig = R.anyPass([R.isNil, R.isEmpty, R.complement(R.has('baseURL')), R.complement(R.propIs(String, 'baseURL')), R.propSatisfies(R.isEmpty, 'baseURL')]);
+
+/**
+ * Are we dealing with a promise?
+ */
+var isPromise = function isPromise(obj) {
+  return !!obj && ((typeof obj === 'undefined' ? 'undefined' : _typeof(obj)) === 'object' || typeof obj === 'function') && typeof obj.then === 'function';
+};
 
 // the default headers given to axios
 var DEFAULT_HEADERS = {
@@ -106,6 +42,7 @@ var TIMEOUT_ERROR = 'TIMEOUT_ERROR';
 var CONNECTION_ERROR = 'CONNECTION_ERROR';
 var NETWORK_ERROR = 'NETWORK_ERROR';
 var UNKNOWN_ERROR = 'UNKNOWN_ERROR';
+var CANCEL_ERROR = 'CANCEL_ERROR';
 
 var TIMEOUT_ERROR_CODES = ['ECONNABORTED'];
 var NODEJS_CONNECTION_ERROR_CODES = ['ENOTFOUND', 'ECONNREFUSED', 'ECONNRESET'];
@@ -133,10 +70,14 @@ var create = function create(config) {
   };
 
   var requestTransforms = [];
+  var asyncRequestTransforms = [];
   var responseTransforms = [];
 
   var addRequestTransform = function addRequestTransform(transform) {
     return requestTransforms.push(transform);
+  };
+  var addAsyncRequestTransform = function addAsyncRequestTransform(transform) {
+    return asyncRequestTransforms.push(transform);
   };
   var addResponseTransform = function addResponseTransform(transform) {
     return responseTransforms.push(transform);
@@ -155,6 +96,21 @@ var create = function create(config) {
       return setHeader(header, headers[header]);
     }, keys);
     return instance;
+  };
+
+  /**
+   * Sets a new base URL.
+   */
+  var setBaseURL = function setBaseURL(newURL) {
+    instance.defaults.baseURL = newURL;
+    return instance;
+  };
+
+  /**
+   * Gets the current base URL used by axios.
+   */
+  var getBaseURL = function getBaseURL() {
+    return instance.defaults.baseURL;
   };
 
   /**
@@ -180,41 +136,89 @@ var create = function create(config) {
   /**
     Make the request with this config!
    */
-  var doRequest = function doRequest(axiosRequestConfig) {
-    var startedAt = RS.toNumber(new Date());
+  var doRequest = function () {
+    var _ref = _asyncToGenerator(_regeneratorRuntime.mark(function _callee(axiosRequestConfig) {
+      var index, transform, chain;
+      return _regeneratorRuntime.wrap(function _callee$(_context) {
+        while (1) {
+          switch (_context.prev = _context.next) {
+            case 0:
+              axiosRequestConfig.headers = _extends({}, headers, axiosRequestConfig.headers);
 
-    axiosRequestConfig.headers = _extends({}, headers, axiosRequestConfig.headers);
-    // add the request transforms
-    if (requestTransforms.length > 0) {
-      (function () {
-        // create an object to feed through the request transforms
-        var request = R.pick(['url', 'method', 'data', 'headers', 'params'], axiosRequestConfig);
+              // add the request transforms
+              if (requestTransforms.length > 0) {
+                // overwrite our axios request with whatever our object looks like now
+                // axiosRequestConfig = doRequestTransforms(requestTransforms, axiosRequestConfig)
+                R.forEach(function (transform) {
+                  return transform(axiosRequestConfig);
+                }, requestTransforms);
+              }
 
-        // go go go!
-        R.forEach(function (transform) {
-          return transform(request);
-        }, requestTransforms);
+              // add the async request transforms
 
-        // overwrite our axios request with whatever our object looks like now
-        axiosRequestConfig = R.merge(axiosRequestConfig, request);
-      })();
-    }
+              if (!(asyncRequestTransforms.length > 0)) {
+                _context.next = 16;
+                break;
+              }
 
-    // first convert the axios response, then execute our callback
-    var chain = R.pipe(R.partial(convertResponse, [startedAt]), runMonitors);
+              index = 0;
 
-    // Make the request and execute the identical pipeline for both promise paths.
-    return instance.request(axiosRequestConfig).then(chain).catch(chain);
-  };
+            case 4:
+              if (!(index < asyncRequestTransforms.length)) {
+                _context.next = 16;
+                break;
+              }
+
+              transform = asyncRequestTransforms[index](axiosRequestConfig);
+
+              if (!isPromise(transform)) {
+                _context.next = 11;
+                break;
+              }
+
+              _context.next = 9;
+              return transform;
+
+            case 9:
+              _context.next = 13;
+              break;
+
+            case 11:
+              _context.next = 13;
+              return transform(axiosRequestConfig);
+
+            case 13:
+              index++;
+              _context.next = 4;
+              break;
+
+            case 16:
+
+              // after the call, convert the axios response, then execute our monitors
+              chain = R.pipe(R.partial(convertResponse, [RS.toNumber(new Date())]), runMonitors);
+              return _context.abrupt('return', instance.request(axiosRequestConfig).then(chain).catch(chain));
+
+            case 18:
+            case 'end':
+              return _context.stop();
+          }
+        }
+      }, _callee, _this);
+    }));
+
+    return function doRequest(_x5) {
+      return _ref.apply(this, arguments);
+    };
+  }();
 
   /**
     Fires after we convert from axios' response into our response.  Exceptions
     raised for each monitor will be ignored.
    */
   var runMonitors = function runMonitors(ourResponse) {
-    monitors.forEach(function (fn) {
+    monitors.forEach(function (monitor) {
       try {
-        fn(ourResponse);
+        monitor(ourResponse);
       } catch (error) {
         // all monitor complaints will be ignored
       }
@@ -230,7 +234,7 @@ var create = function create(config) {
     var duration = end - startedAt;
 
     // new in Axios 0.13 -- some data could be buried 1 level now
-    var isError = axiosResponse instanceof Error;
+    var isError = axiosResponse instanceof Error || axios.isCancel(axiosResponse);
     var response = isError ? axiosResponse.response : axiosResponse;
     var status = response && response.status || null;
     var problem = isError ? getProblemFromError(axiosResponse) : getProblemFromStatus(status);
@@ -241,13 +245,14 @@ var create = function create(config) {
     if (response && response.data) data = response.data;
 
     // give an opportunity for anything to the response transforms to change stuff along the way
+    var transformedResponse = { duration: duration, problem: problem, ok: ok, status: status, headers: headers, config: config, data: data };
     if (responseTransforms.length > 0) {
       R.forEach(function (transform) {
-        transform({ duration: duration, problem: problem, ok: ok, status: status, headers: headers, config: config, data: data });
+        return transform(transformedResponse);
       }, responseTransforms);
     }
 
-    return { duration: duration, problem: problem, ok: ok, status: status, headers: headers, config: config, data: data };
+    return transformedResponse;
   };
 
   /**
@@ -258,6 +263,8 @@ var create = function create(config) {
   var getProblemFromError = function getProblemFromError(error) {
     // first check if the error message is Network Error (set by axios at 0.12) on platforms other than NodeJS.
     if (error.message === 'Network Error') return NETWORK_ERROR;
+    if (axios.isCancel(error)) return CANCEL_ERROR;
+
     // then check the specific error code
     return R.cond([
     // if we don't have an error code, we have a response status
@@ -279,12 +286,16 @@ var create = function create(config) {
     monitors: monitors,
     addMonitor: addMonitor,
     requestTransforms: requestTransforms,
+    asyncRequestTransforms: asyncRequestTransforms,
     responseTransforms: responseTransforms,
     addRequestTransform: addRequestTransform,
+    addAsyncRequestTransform: addAsyncRequestTransform,
     addResponseTransform: addResponseTransform,
     setHeader: setHeader,
     setHeaders: setHeaders,
     headers: headers,
+    setBaseURL: setBaseURL,
+    getBaseURL: getBaseURL,
     get: R.partial(doRequestWithoutBody, ['get']),
     delete: R.partial(doRequestWithoutBody, ['delete']),
     head: R.partial(doRequestWithoutBody, ['head']),
@@ -318,5 +329,6 @@ exports.TIMEOUT_ERROR = TIMEOUT_ERROR;
 exports.CONNECTION_ERROR = CONNECTION_ERROR;
 exports.NETWORK_ERROR = NETWORK_ERROR;
 exports.UNKNOWN_ERROR = UNKNOWN_ERROR;
+exports.CANCEL_ERROR = CANCEL_ERROR;
 exports.create = create;
 exports['default'] = apisauce;

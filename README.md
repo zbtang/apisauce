@@ -151,6 +151,15 @@ config   - Object - the `axios` config object used to make the request
 duration - Number - the number of milliseconds it took to run this request
 ```
 
+## Changing Base URL
+
+You can change the URL your api is connecting to.
+
+```js
+api.setBaseURL('https://some.other.place.com/api/v100')
+console.log(`omg i am now at ${api.getBaseURL()}`)
+```
+
 ## Changing Headers
 
 Once you've created your api, you're able to change HTTP requests by
@@ -225,7 +234,7 @@ For responses, you're provided an object with these properties.
 Data is the only option changeable.
 
 ```js
-api.addResponseTransform(response) => {
+api.addResponseTransform(response => {
   const badluck = Math.floor(Math.random() * 10) === 0
   if (badluck) {
     // just mutate the data to what you want.
@@ -247,6 +256,8 @@ The object passed in has these properties:
 * `headers` - the request headers
 * `params` - the request params for `get`, `delete`, `head`, `link`, `unlink`
 
+Request transforms can be a function:
+
 ```js
 api.addRequestTransform(request => {
   request.headers['X-Request-Transform'] = 'Changing Stuff!'
@@ -258,6 +269,25 @@ api.addRequestTransform(request => {
   }
 })
 ```
+
+And you can also add an async version for use with Promises or `async/await`. When you resolve
+your promise, ensure you pass the request along.
+
+```js
+api.addAsyncRequestTransform(request => {
+  return new Promise(resolve => setTimeout(resolve, 2000))
+})
+```
+
+```js
+api.addAsyncRequestTransform(request => async () => {
+  await AsyncStorage.load('something')
+})
+```
+
+This is great if you need to fetch an API key from storage for example.
+
+Multiple async transforms will be run one at a time in succession, not parallel.
 
 
 # Using Async/Await
@@ -286,6 +316,7 @@ SERVER_ERROR     'SERVER_ERROR'     500-599       Any 500 series error.
 TIMEOUT_ERROR    'TIMEOUT_ERROR'    ---           Server didn't respond in time.
 CONNECTION_ERROR 'CONNECTION_ERROR' ---           Server not available, bad dns.
 NETWORK_ERROR    'NETWORK_ERROR'    ---           Network not available.
+CANCEL_ERROR     'CANCEL_ERROR'     ---           Request has been cancelled. Only possible if `cancelToken` is provided in config, see axios `Cancellation`.
 ```
 
 Which problem is chosen will be picked by walking down the list.
@@ -297,6 +328,25 @@ Bugs?  Comments?  Features?  PRs and Issues happily welcomed!
 
 
 # Release Notes
+
+### 0.10.0 - February 7, 2017
+
+* [NEW] Adds async request transforms. - #31, #54, #56 by @skibz & @skellock
+* [NEW] Adds a way to change the base URL of an API. - #55 by @skellock
+* [NEW] Upgrades dependencies including an [odd corner case](https://github.com/skellock/ramdasauce/pull/7). - #52 by @skellock
+
+### 0.9.0 - February 7, 2017
+
+* [NOTE] We don't talk about 0.9.0.
+
+### 0.8.0 - January 15, 2017
+
+* [NEW] Adds cancel token support. - #49 by @romanlv
+
+### 0.7.0 - December 2, 2016
+
+* [NEW] Adds support for reassign data in request transforms - #44 and #42 by @mmahalwy and @skellock 
+* [NEW] Upgrades to Axios 0.15.3 - #43 by @skellock
 
 ### 0.6.0 - November 2, 2016
 
